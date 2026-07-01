@@ -12,18 +12,18 @@ To ensure separation of concerns and database independence, the application util
 
 ```mermaid
 graph TD
-    subgraph Frontend Container (React App)
+    subgraph "Frontend Container (React App)"
         UI[App.js Component] -->|State Hooks| State[Todos / Loading / Errors]
         UI -->|Fetch Requests| API_Client[HTTP Client]
     end
 
-    subgraph Backend Container (Django API)
+    subgraph "Backend Container (Django API)"
         API_Client -->|POST / GET /todos/| Views[views.py TodoListView]
         Views -->|Request Validation| Validation[Type & Content Checks]
         Views -->|Query / Save| Repo[repositories.py MongoTodoRepository]
     end
 
-    subgraph Database Container (MongoDB)
+    subgraph "Database Container (MongoDB)"
         Repo -->|PyMongo Client| DB[(MongoDB: test_db)]
     end
 ```
