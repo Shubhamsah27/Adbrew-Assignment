@@ -1,5 +1,5 @@
 # set base image (host OS)
-FROM python:3.8
+FROM python:3.8-bullseye
 
 RUN rm /bin/sh && ln -s /bin/bash /bin/sh
 
@@ -21,7 +21,7 @@ RUN apt-get install -y mongodb-org
 RUN apt-get install -y yarn
 
 # Install PIP
-RUN easy_install pip
+RUN python -m pip install "pip<24.1"
 
 
 ENV ENV_TYPE staging
