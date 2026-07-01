@@ -1,68 +1,93 @@
-# NOTE: DO NOT FORK THIS REPOSITORY. CLONE AND SETUP A STANDALONE REPOSITORY.
+# Adbrew TODO Application - Submission
 
-# Adbrew Test!
+This repository contains the completed submission for the Adbrew SDE Intern coding assignment. 
 
-Hello! This test is designed to specifically test your Python, React and web development skills. The task is unconventional and has a slightly contrived setup on purpose and requires you to learn basic concepts of Docker on the fly. 
+The implementation focuses heavily on **clean architecture, strict validation, database resilience, and frontend robustness**, while maintaining a clean and functional design.
 
+---
 
-# Structure
+## Architecture Overview
 
-This repository includes code for a Docker setup with 3 containers:
-* App: This is the React dev server and runs on http://localhost:3000. The code for this resides in src/app directory.
-* API: This is the backend container that run a Django instance on http://localhost:8000. 
-* Mongo: This is a DB instance running on port 27017. Django views already have code written to connect to this instance of Mongo.
+To ensure separation of concerns and database independence, the application utilizes a **Repository Pattern** on the backend. This decouples our HTTP request-handling view controllers from the database implementation details.
 
-We highly recommend you go through the setup in `Dockerfile` and `docker-compose.yml`. If you are able to understand and explain the setup, that will be a huge differentiator.
+```mermaid
+graph TD
+    subgraph Frontend Container (React App)
+        UI[App.js Component] -->|State Hooks| State[Todos / Loading / Errors]
+        UI -->|Fetch Requests| API_Client[HTTP Client]
+    end
 
-# Setup
-1. Clone this repository (DO NOT FORK)
+    subgraph Backend Container (Django API)
+        API_Client -->|POST / GET /todos/| Views[views.py TodoListView]
+        Views -->|Request Validation| Validation[Type & Content Checks]
+        Views -->|Query / Save| Repo[repositories.py MongoTodoRepository]
+    end
+
+    subgraph Database Container (MongoDB)
+        Repo -->|PyMongo Client| DB[(MongoDB: test_db)]
+    end
 ```
-git clone https://github.com/adbrew/test.git
-```
-2. Change into the cloned directory and set the environment variable for the code path. Replace `path_to_repository` appropriately.
-```
-export ADBREW_CODEBASE_PATH="{path_to_repository}/test/src"
-```
-3. Build container (you only need to build containers for the first time or if you change image definition, i.e., `Dockerfile`). This step will take a good amount of time.
-```
-docker-compose build
-```
-4. Once the build is completed, start the containers:
-```
-docker-compose up -d
-```
-5. Once complete, `docker ps` should output something like this:
-```
-CONTAINER ID   IMAGE               COMMAND                  CREATED         STATUS         PORTS                      NAMES
-e445be7efa61   adbrew_test_api     "bash -c 'cd /src/re…"   3 minutes ago   Up 2 seconds   0.0.0.0:8000->8000/tcp     api
-0fd203f12d8a   adbrew_test_app     "bash -c 'cd /src/ap…"   4 minutes ago   Up 3 minutes   0.0.0.0:3000->3000/tcp     app
-884cb9296791   adbrew_test_mongo   "/usr/bin/mongod --b…"   4 minutes ago   Up 3 minutes   0.0.0.0:27017->27017/tcp   mongo
-```
-6. Check that you are able to access http://localhost:3000 and http://localhost:8000/todos
-7. If the containers in #5 or #6 are not up, we would like you to use your debugging skills to figure out the issue. Only reach out to us if you've exhausted all possible options. The `app` container may take a good amount of time to start since it will download all package dependencies.
 
-# Tips
-1. Once containers are up and running, you can view container logs by executing `docker logs -f --tail=100 {container_name}` Replace `container_name` with `app` or `api`(output of `docker ps`)
-2. You can enter the container and inspect it by executing `docker exec -it {container_name} bash` Replace `{container_name}` with `app` or `api` (output of `docker ps`)
-3. Shut all containers using `docker-compose down`
-4. Restart a container using `docker restart {container_name}`
+---
 
+## Architectural Decisions & Design Patterns
 
-# Task
+### 1. Repository Pattern (`MongoTodoRepository`)
+Rather than placing database connection logic and raw queries directly inside the Django views, all database tasks are encapsulated within a dedicated `MongoTodoRepository` class inside `repositories.py`.
+- **Decoupling**: If the database changes in the future (e.g. from MongoDB to PostgreSQL), the views do not need to be refactored; only a new repository adapter is required.
+- **Connection Isolation**: Encapsulates connection timeout limits and error propagation.
 
-When you run `localhost:3000`, you would see 2 things:
-1. A form with a TODO description textbox and a submit button. On this form submission, the app should interact with the Django backend (`POST http://localhost:8000/todos`) and create a TODO in MongoDB.
-2. A list with hardcoded TODOs. This should be changed to reflect TODOs in the backend (`GET http://localhost:8000/todos`). 
-3. When the form is submitted, the TODO list should refresh again and fetch latest list of TODOs from MongoDB.
+### 2. Strict Input Validation
+The POST handler in `views.py` performs clean schema and semantic validation on every incoming request:
+- **Presence**: Verifies that the required `text` field exists.
+- **Type Safety**: Ensures that `text` is a string (rejecting numbers or objects).
+- **Format Integrity**: Trims whitespace and rejects blank or empty strings.
+- **HTTP status codes**: Returns `400 Bad Request` with structured error messages explaining the validation failure.
 
-# Instructions [IMPORTANT] 
-1. All React code should be implemented using [React hooks](https://reactjs.org/docs/hooks-intro.html) and should not use traditional stateful React components and component lifecycle method.
-2. Do not use Django's model, serializers or SQLite DB. Persist and retrieve all data from the mongo instance. A `db` instance is already present in `views.py`.
-3. Do not bypass the Docker setup. Submissions that do not have proper docker setup will be rejected.
-4. We are looking for developers who have strong fundamentals and can ramp up fast. We expect you to learn and grasp basic React Hooks/Mongo/Docker concepts on the fly.
-5. Do not fork this repository or submit your solution as a PR since this is a public repo and there are other candidates taking the same test. Send us a link to your repo privately.
-6. If you are able to complete the test, we will have a live walkthrough of your code and ask questions to check your understanding.
-7. The code for the actual solution is pretty easy. The code quality in your solution should be production-ready - error handling, abstractions, well-maintainable and modular code. If you're not aware, we recommend reading a bit about software design principles and applying them (both JS and Python). Here are some reading resources to get you started:
-   * https://kinsta.com/blog/python-object-oriented-programming/
-   * https://realpython.com/solid-principles-python/
-   * https://www.toptal.com/python/python-design-patterns
+### 3. Database Resilience & Failure Isolation
+To prevent the API from crashing or hanging if MongoDB is unreachable:
+- Database connections specify a short 2-second timeout window.
+- Operations are wrapped in try-except blocks catching `PyMongoError`.
+- Returns an explicit `503 Service Unavailable` status with a descriptive JSON message, preventing internal server errors (`500`).
+
+### 4. Resilient Frontend (React Hooks)
+The React application (`App.js`) implements production-level UI state management using functional components and hooks:
+- **Loading State**: Displays clean feedback during initial data load.
+- **Error Banners**: Displays dismissible alerts when backend requests fail.
+- **Double-Submit Protection**: Tracks a `isSubmitting` state to disable inputs and the submit button during API calls, preventing duplicate document creation on rapid user clicks.
+- **Aesthetic**: Simple, clean, and professional layout.
+
+---
+
+## Verification & Unit Testing
+
+### Automated Backend Tests
+A suite of Django unit tests has been implemented inside `tests.py` using mock interfaces. They test:
+- Successful GET and POST requests.
+- Input validation (missing field, wrong data type, and empty string errors).
+- MongoDB connection outage handling (returning `503`).
+
+To run the test suite locally:
+```bash
+# Execute within the project root directory
+.\venv\Scripts\python.exe src/rest/manage.py test rest
+```
+
+---
+
+## original Instructions Setup
+
+*Refer to the original instructions below for configuring paths and starting Docker.*
+
+1. Set the codebase path variable:
+   ```powershell
+   $env:ADBREW_CODEBASE_PATH = "D:\Assessment\Adbrew\adb_test-master\src"
+   ```
+2. Build and start containers:
+   ```bash
+   docker-compose build
+   docker-compose up -d
+   ```
+3. Access:
+   - Frontend: `http://localhost:3000`
+   - Backend API: `http://localhost:8000/todos/`
